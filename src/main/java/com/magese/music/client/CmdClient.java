@@ -4,12 +4,9 @@ import cn.hutool.core.io.IoUtil;
 import com.magese.music.utils.CommonUtil;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
-import java.util.Arrays;
 
 /**
  * 命令行客户端
@@ -20,7 +17,7 @@ import java.util.Arrays;
 @Slf4j
 public class CmdClient {
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException {
         long start = System.currentTimeMillis();
         // String[] cmdLine = {"cmd", "/c", "media-get", "--searchSongName=\"一路向北\"", "--searchArtist=\"周杰伦\"", "--infoFormat=json"};
         String[] cmdLine = {"cmd", "/c", "media-get --searchSongName=\"一路向北\" --searchArtist=\"周杰伦\" --infoFormat=json"};
