@@ -70,7 +70,28 @@ public class Cmd {
     @Getter
     @AllArgsConstructor
     public enum Help {
-        Help("-h ", "Show this help message"),
+        Help(" -h ", "Show this help message"),
+        ;
+
+        private final String code;
+        private final String msg;
+    }
+
+    /**
+     * 来源 bilibili,douyin,kugou,kuwo,migu,netease,qq,youtube,qmkg
+     */
+    @Getter
+    @AllArgsConstructor
+    public enum Source {
+        BILIBILI("bilibili", "哔哩哔哩"),
+        DOUYIN("douyin", "抖音"),
+        KUGOU("kugou", "酷狗"),
+        KUWO("kuwo", "酷我"),
+        MIGU("migu", "咪咕音乐"),
+        NETEASE("netease", "网易云音乐"),
+        QQ("qq", "QQ音乐"),
+        YOUTUBE("youtube", "YouTube"),
+        QMKG("qmkg", "全民K歌"),
         ;
 
         private final String code;
