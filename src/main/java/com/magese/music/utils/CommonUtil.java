@@ -53,4 +53,24 @@ public class CommonUtil {
         res.append(ms).append(" ms");
         return res.toString();
     }
+
+    /**
+     * 填充0，例如 num = 4, length = 3 ，即返回 "004"
+     * 不支持负数
+     *
+     * @param num    需填充的数字
+     * @param length 填充后的长度
+     * @return 填充后的数字字符串，超长或负数返回原数字
+     */
+    public static String fillZero(int num, int length) {
+        String stringNum = String.valueOf(num);
+        if (num < 0) {
+            return stringNum;
+        }
+        int diff = length - stringNum.length();
+        if (diff <= 0) {
+            return stringNum;
+        }
+        return "0".repeat(diff) + num;
+    }
 }

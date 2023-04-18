@@ -1,7 +1,10 @@
 package com.magese.music.client;
 
 import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.thread.ThreadUtil;
+import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONConfig;
 import cn.hutool.json.JSONUtil;
 import com.magese.music.constants.Const;
@@ -9,17 +12,24 @@ import com.magese.music.exception.ServiceException;
 import com.magese.music.pojo.CmdExecResult;
 import com.magese.music.pojo.CmdOptionVo;
 import com.magese.music.pojo.SearchResult;
+import com.magese.music.thread.CmdProgress;
 import com.magese.music.utils.CommonUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.MatchResult;
 
 import static com.magese.music.constants.Cmd.*;
 
@@ -46,12 +56,69 @@ public class CmdClient {
      * @return 搜索结果
      */
     public List<SearchResult> search(CmdOptionVo cmdOptionVo) {
-        CmdExecResult result = exec(cmdOptionVo);
+        long start = System.currentTimeMillis();
+
+        String[] cmdLines = parseCmdLines(cmdOptionVo);
+        CmdExecResult result;
+        try {
+            result = doExec(cmdLines);
+            log.info("执行搜索命令行完成 => 耗时：{}", CommonUtil.formatMs(System.currentTimeMillis() - start));
+        } catch (IOException e) {
+            String msg = String.format("执行命令行IO异常：%s", Arrays.toString(cmdLines));
+            log.error(msg, e);
+            throw new ServiceException(msg, e);
+        } catch (ExecutionException e) {
+            String msg = String.format("执行命令行异步获取结果异常：%s", Arrays.toString(cmdLines));
+            log.error(msg, e);
+            throw new ServiceException(msg, e);
+        } catch (InterruptedException e) {
+            String msg = String.format("执行命令行线程中断异常：%s", Arrays.toString(cmdLines));
+            log.error(msg, e);
+            throw new ServiceException(msg, e);
+        } catch (TimeoutException e) {
+            String msg = String.format("执行命令行超时异常：%s", Arrays.toString(cmdLines));
+            log.error(msg, e);
+            throw new ServiceException(msg, e);
+        }
+
+        if (!SUCCESS_CODE.equals(result.getCode())) {
+            String msg = String.format("执行命令行返回结果异常，code=%s, msg=%s", result.getCode(), result.getErrorMsg());
+            log.error(msg);
+            throw new ServiceException(msg);
+        }
+
         String msg = result.getSuccessMsg();
+
+        String regex = "\\[\\s*\\{\\s*\"Name\"";
+        MatchResult matchResult = ReUtil.indexOf(regex, msg);
+        if (matchResult == null) {
+            return Collections.emptyList();
+        }
+        msg = msg.substring(matchResult.start(0));
+
         JSONConfig jsonConfig = JSONConfig.create()
                 .setIgnoreCase(true)
                 .setIgnoreError(true);
-        return JSONUtil.parseArray(msg, jsonConfig).toList(SearchResult.class);
+        JSONArray array = JSONUtil.parseArray(msg, jsonConfig);
+        log.info("搜索结果数量 => {}", array.size());
+        return array.toList(SearchResult.class);
+    }
+
+    public CmdProgress downloadAsync(CmdOptionVo cmdOptionVo) {
+        long start = System.currentTimeMillis();
+
+        String[] cmdLines = parseCmdLines(cmdOptionVo);
+        CmdProgress cmdProgress;
+        try {
+            cmdProgress = doExecAsync(cmdLines);
+            log.info("执行异步下载命令行完成 => 耗时：{}", CommonUtil.formatMs(System.currentTimeMillis() - start));
+        } catch (IOException e) {
+            String msg = String.format("执行命令行IO异常：%s", Arrays.toString(cmdLines));
+            log.error(msg, e);
+            throw new ServiceException(msg, e);
+        }
+
+        return cmdProgress;
     }
 
     /**
@@ -92,7 +159,7 @@ public class CmdClient {
                 (StrUtil.isBlank(cmdOptionVo.getInfoFormat()) ? Const.EMPTY : App.INFO_FORMAT.append(cmdOptionVo.getInfoFormat()));
         cmdLines.add(cmd);
 
-        log.info("解析转换命令行结果 => {}", cmdLines);
+        log.info("解析命令行 => {}", cmdLines);
 
         String[] arr = new String[cmdLines.size()];
         return cmdLines.toArray(arr);
@@ -101,7 +168,7 @@ public class CmdClient {
     /**
      * 执行命令行
      *
-     * @param cmdLines 命令数组
+     * @param cmdLines 命令行数组
      * @return 执行结果
      * @throws IOException          读写异常
      * @throws InterruptedException 线程中断异常
@@ -127,45 +194,62 @@ public class CmdClient {
     }
 
     /**
-     * 执行命令行
+     * 异步执行命令行
      *
-     * @param cmdOptionVo 命令行选项
-     * @return 执行结果
+     * @param cmdLines 命令行数组
+     * @return 执行结果，会持续更新至 completed = true
+     * @throws IOException 读写异常
      */
-    private CmdExecResult exec(CmdOptionVo cmdOptionVo) {
-        long start = System.currentTimeMillis();
+    private CmdProgress doExecAsync(String[] cmdLines) throws IOException {
+        Runtime runtime = Runtime.getRuntime();
+        Process process = runtime.exec(cmdLines);
 
-        String[] cmdLines = parseCmdLines(cmdOptionVo);
 
-        CmdExecResult result;
-        try {
-            result = doExec(cmdLines);
-            log.info("执行命令行结果 => {} => 耗时：{}", result, CommonUtil.formatMs(System.currentTimeMillis() - start));
-        } catch (IOException e) {
-            String msg = String.format("执行命令行IO异常：%s", Arrays.toString(cmdLines));
-            log.error(msg, e);
-            throw new ServiceException(msg, e);
-        } catch (ExecutionException e) {
-            String msg = String.format("执行命令行异步获取结果异常：%s", Arrays.toString(cmdLines));
-            log.error(msg, e);
-            throw new ServiceException(msg, e);
-        } catch (InterruptedException e) {
-            String msg = String.format("执行命令行线程中断异常：%s", Arrays.toString(cmdLines));
-            log.error(msg, e);
-            throw new ServiceException(msg, e);
-        } catch (TimeoutException e) {
-            String msg = String.format("执行命令行超时异常：%s", Arrays.toString(cmdLines));
-            log.error(msg, e);
-            throw new ServiceException(msg, e);
-        }
+        CmdProgress cmdProgress = CmdProgress.builder()
+                .inputStream(process.getInputStream())
+                .errorStream(process.getErrorStream())
+                .build();
 
-        if (!SUCCESS_CODE.equals(result.getCode())) {
-            String msg = String.format("执行命令行返回结果异常，code=%s, msg=%s", result.getCode(), result.getErrorMsg());
-            log.error(msg);
-            throw new ServiceException(msg);
-        }
+        // errorStream
+        CompletableFuture.runAsync(() -> {
+            String errorMsg = IoUtil.read(process.getErrorStream(), StandardCharsets.UTF_8);
+            if (StrUtil.isNotBlank(errorMsg)) {
+                cmdProgress.setCompleted(true);
+                cmdProgress.setError(true);
+                cmdProgress.setMsg(errorMsg);
+            }
+        }, cmdExecutor);
 
-        return result;
+        // inputStream
+        CompletableFuture.runAsync(() -> {
+            InputStream inputStream = cmdProgress.getInputStream();
+            StringBuilder builder = new StringBuilder();
+            try (InputStreamReader streamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+                 BufferedReader reader = new BufferedReader(streamReader)) {
+                String line;
+                String prefix = "downloading percent: ";
+                String regex = "\\d+\\.\\d+%";
+                while ((line = reader.readLine()) != null) {
+                    if (ReUtil.contains(prefix + regex, line)) {
+                        cmdProgress.setPercent(ReUtil.getGroup0(regex, line));
+                    } else {
+                        builder.append(line);
+                    }
+                }
+                cmdProgress.setMsg(builder.toString());
+            } catch (IOException e) {
+                String msg = String.format("读取控制台输出消息IO异常：%s", e.getMessage());
+                cmdProgress.setCompleted(true);
+                cmdProgress.setError(true);
+                cmdProgress.setMsg(msg);
+                log.error(msg);
+                throw new ServiceException(msg);
+            } finally {
+                cmdProgress.setCompleted(true);
+            }
+        });
+
+        return cmdProgress;
     }
 
     public static void main(String[] args) {
@@ -177,17 +261,48 @@ public class CmdClient {
         cmdExecutor.setThreadNamePrefix("cmd-task-");
         cmdExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         cmdExecutor.initialize();
-        CmdClient cmdClient = new CmdClient(cmdExecutor);
 
-        CmdOptionVo cmdOptionVo = CmdOptionVo.builder()
-                .searchSongName("Won't you stand")
-                .searchArtist("")
-                .build();
+        try {
+            CmdClient cmdClient = new CmdClient(cmdExecutor);
 
-        List<SearchResult> searched = cmdClient.search(cmdOptionVo);
-        searched.forEach(s -> log.info(s.toString()));
+            CmdOptionVo searchVo = CmdOptionVo.builder()
+                    .searchSongName("落日")
+                    .build();
 
-        cmdExecutor.destroy();
+            AtomicInteger i = new AtomicInteger();
+            List<SearchResult> searched = cmdClient.search(searchVo);
+            searched.forEach(s -> log.info(CommonUtil.fillZero(i.getAndIncrement(), 2) + "-" + s.toString()));
+
+            System.out.println();
+            System.out.println("**********************************************************");
+            System.out.println();
+
+            CmdOptionVo downloadVo = CmdOptionVo.builder()
+                    .url(searched.get(0).getUrl())
+                    .out("C:\\Users\\Magese\\Desktop")
+                    .addMediaTag(false)
+                    .infoFormat(Format.PLAIN.getCode())
+                    .build();
+            CmdProgress cmdProgress = cmdClient.downloadAsync(downloadVo);
+
+            while (!cmdProgress.isCompleted()) {
+                log.info(cmdProgress.toString());
+                ThreadUtil.safeSleep(1000);
+            }
+            log.info(cmdProgress.toString());
+            if (cmdProgress.isError()) {
+                String msg = String.format("执行命令行返回结果异常，msg=%s", cmdProgress.getMsg());
+                log.error(msg);
+                throw new ServiceException(msg);
+            }
+        } catch (ServiceException e) {
+            log.warn(e.getMessage());
+        } catch (Exception e) {
+            log.error("未知异常", e);
+        } finally {
+            cmdExecutor.destroy();
+        }
+
     }
 
 }

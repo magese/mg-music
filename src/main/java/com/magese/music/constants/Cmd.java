@@ -78,7 +78,7 @@ public class Cmd {
     }
 
     /**
-     * 来源 bilibili,douyin,kugou,kuwo,migu,netease,qq,youtube,qmkg
+     * 来源
      */
     @Getter
     @AllArgsConstructor
@@ -92,6 +92,20 @@ public class Cmd {
         QQ("qq", "QQ音乐"),
         YOUTUBE("youtube", "YouTube"),
         QMKG("qmkg", "全民K歌"),
+        ;
+
+        private final String code;
+        private final String msg;
+    }
+
+    /**
+     * 格式化
+     */
+    @Getter
+    @AllArgsConstructor
+    public enum Format {
+        PLAIN("plain", "文本格式"),
+        JSON("json", "JSON格式"),
         ;
 
         private final String code;

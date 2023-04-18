@@ -1,5 +1,6 @@
 package com.magese.music.pojo;
 
+import com.magese.music.constants.Cmd;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -41,7 +42,7 @@ public class CmdOptionVo implements java.io.Serializable {
      * "媒体信息以何种形式展示。支持 plain/json. 默认为 plain
      */
     @Builder.Default
-    private String infoFormat = "json";
+    private String infoFormat = Cmd.Format.JSON.getCode();
     /**
      * 日志输出级别。支持 silence/error/warn/info/debug. 默认为 info
      */
