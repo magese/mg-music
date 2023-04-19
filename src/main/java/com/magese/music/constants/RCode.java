@@ -13,7 +13,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum RCode {
     SUCCESS("0000", "成功"),
-    ERROR("E9999", "系统异常"),
+    SERVICE_EXCEPTION("E1000", "服务异常"),
+    ERROR("E9999", "系统未知错误"),
     ;
 
     private final String code;
