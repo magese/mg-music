@@ -22,7 +22,7 @@ import java.util.List;
 @Service
 public class SearchServiceImpl implements SearchService {
 
-    private final MusicClientApi musicClientApi;
+    private final MusicClientApi cmdClient;
 
     /**
      * 搜索
@@ -32,7 +32,7 @@ public class SearchServiceImpl implements SearchService {
      */
     @Override
     public SearchResponse search(SearchRequest request) {
-        List<SearchResult> search = musicClientApi.search(request);
+        List<SearchResult> search = cmdClient.search(request);
         return SearchResponse.builder().results(search).build();
     }
 }

@@ -18,6 +18,10 @@ import lombok.NoArgsConstructor;
 public class DownloadRequest implements java.io.Serializable {
 
     /**
+     * 客户端ID
+     */
+    private String clientId;
+    /**
      * 音乐URL地址
      */
     private String url;

@@ -1,5 +1,7 @@
 package com.magese.music.pojo.vo;
 
+import com.magese.music.pojo.dto.DownloadProgress;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,6 +15,12 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class DownloadResponse implements java.io.Serializable {
+
+    /**
+     * 下载进度
+     */
+    private DownloadProgress progress;
 
 }

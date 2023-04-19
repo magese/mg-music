@@ -9,7 +9,6 @@ import cn.hutool.json.JSONUtil;
 import com.magese.music.constants.Const;
 import com.magese.music.exception.ServiceException;
 import com.magese.music.pojo.dto.CmdOption;
-import com.magese.music.pojo.dto.CmdProgress;
 import com.magese.music.pojo.dto.DownloadProgress;
 import com.magese.music.pojo.result.CmdExecResult;
 import com.magese.music.pojo.result.SearchResult;
@@ -136,9 +135,9 @@ public class CmdClient implements MusicClientApi {
                 .infoFormat(Format.PLAIN.getCode())
                 .build();
         String[] cmdLines = parseCmdLines(cmdOption);
-        CmdProgress cmdProgress;
+        DownloadProgress progress;
         try {
-            cmdProgress = doExecAsync(cmdLines);
+            progress = doExecAsync(cmdLines);
             log.info("执行异步下载命令行完成 => 耗时：{}", CommonUtil.formatMs(System.currentTimeMillis() - start));
         } catch (IOException e) {
             String msg = String.format("执行命令行IO异常：%s", Arrays.toString(cmdLines));
@@ -146,7 +145,7 @@ public class CmdClient implements MusicClientApi {
             throw new ServiceException(msg, e);
         }
 
-        return cmdProgress;
+        return progress;
     }
 
     /**
@@ -228,29 +227,26 @@ public class CmdClient implements MusicClientApi {
      * @return 执行结果，会持续更新至 completed = true
      * @throws IOException 读写异常
      */
-    private CmdProgress doExecAsync(String[] cmdLines) throws IOException {
+    private DownloadProgress doExecAsync(String[] cmdLines) throws IOException {
         Runtime runtime = Runtime.getRuntime();
         Process process = runtime.exec(cmdLines);
 
-
-        CmdProgress cmdProgress = CmdProgress.builder()
-                .inputStream(process.getInputStream())
-                .errorStream(process.getErrorStream())
-                .build();
+        InputStream inputStream = process.getInputStream();
+        InputStream errorStream = process.getErrorStream();
+        DownloadProgress progress = new DownloadProgress();
 
         // errorStream
         CompletableFuture.runAsync(() -> {
-            String errorMsg = IoUtil.read(process.getErrorStream(), StandardCharsets.UTF_8);
+            String errorMsg = IoUtil.read(errorStream, StandardCharsets.UTF_8);
             if (StrUtil.isNotBlank(errorMsg)) {
-                cmdProgress.setCompleted(true);
-                cmdProgress.setError(true);
-                cmdProgress.setMsg(errorMsg);
+                progress.setCompleted(true);
+                progress.setError(true);
+                progress.setMsg(errorMsg);
             }
         }, cmdExecutor);
 
         // inputStream
         CompletableFuture.runAsync(() -> {
-            InputStream inputStream = cmdProgress.getInputStream();
             StringBuilder builder = new StringBuilder();
             try (InputStreamReader streamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
                  BufferedReader reader = new BufferedReader(streamReader)) {
@@ -261,25 +257,25 @@ public class CmdClient implements MusicClientApi {
                     if (ReUtil.contains(prefix + regex, line)) {
                         BigDecimal percent = new BigDecimal(ReUtil.getGroup0(regex, line))
                                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.DOWN);
-                        cmdProgress.setPercent(percent);
+                        progress.setPercent(percent);
                     } else {
                         builder.append(line);
                     }
                 }
-                cmdProgress.setMsg(builder.toString());
+                progress.setMsg(builder.toString());
             } catch (IOException e) {
                 String msg = String.format("读取控制台输出消息IO异常：%s", e.getMessage());
-                cmdProgress.setCompleted(true);
-                cmdProgress.setError(true);
-                cmdProgress.setMsg(msg);
+                progress.setCompleted(true);
+                progress.setError(true);
+                progress.setMsg(msg);
                 log.error(msg);
                 throw new ServiceException(msg);
             } finally {
-                cmdProgress.setCompleted(true);
+                progress.setCompleted(true);
             }
         });
 
-        return cmdProgress;
+        return progress;
     }
 
 }
