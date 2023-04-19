@@ -1,4 +1,4 @@
-package com.magese.music.pojo;
+package com.magese.music.pojo.result;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;

@@ -1,4 +1,4 @@
-package com.magese.music.pojo;
+package com.magese.music.pojo.result;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

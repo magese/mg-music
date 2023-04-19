@@ -1,7 +1,6 @@
 package com.magese.music.client;
 
 import cn.hutool.core.io.IoUtil;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
@@ -9,14 +8,18 @@ import cn.hutool.json.JSONConfig;
 import cn.hutool.json.JSONUtil;
 import com.magese.music.constants.Const;
 import com.magese.music.exception.ServiceException;
-import com.magese.music.pojo.CmdExecResult;
-import com.magese.music.pojo.CmdOptionVo;
-import com.magese.music.pojo.SearchResult;
-import com.magese.music.thread.CmdProgress;
+import com.magese.music.pojo.dto.CmdOption;
+import com.magese.music.pojo.dto.CmdProgress;
+import com.magese.music.pojo.dto.DownloadProgress;
+import com.magese.music.pojo.result.CmdExecResult;
+import com.magese.music.pojo.result.SearchResult;
+import com.magese.music.pojo.vo.DownloadRequest;
+import com.magese.music.pojo.vo.SearchRequest;
 import com.magese.music.utils.CommonUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -27,8 +30,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.MatchResult;
 
 import static com.magese.music.constants.Cmd.*;
@@ -39,9 +44,10 @@ import static com.magese.music.constants.Cmd.*;
  * @author Magese
  * @since 2023/4/14 16:10
  */
+@Component
 @RequiredArgsConstructor
 @Slf4j
-public class CmdClient {
+public class CmdClient implements MusicClientApi {
 
     private static final boolean IS_WIN = System.getProperty("os.name").toLowerCase().contains("win");
     private static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
@@ -52,13 +58,20 @@ public class CmdClient {
     /**
      * 搜索
      *
-     * @param cmdOptionVo 命令行选项
+     * @param request 搜索请求
      * @return 搜索结果
      */
-    public List<SearchResult> search(CmdOptionVo cmdOptionVo) {
+    @Override
+    public List<SearchResult> search(SearchRequest request) {
         long start = System.currentTimeMillis();
 
-        String[] cmdLines = parseCmdLines(cmdOptionVo);
+        CmdOption cmdOption = CmdOption.builder()
+                .keyword(request.getKeyword())
+                .searchSongName(request.getSongName())
+                .searchArtist(request.getArtist())
+                .searchAlbum(request.getAlbum())
+                .build();
+        String[] cmdLines = parseCmdLines(cmdOption);
         CmdExecResult result;
         try {
             result = doExec(cmdLines);
@@ -104,10 +117,23 @@ public class CmdClient {
         return array.toList(SearchResult.class);
     }
 
-    public CmdProgress downloadAsync(CmdOptionVo cmdOptionVo) {
+    /**
+     * 异步下载
+     *
+     * @param request 下载请求
+     * @return 下载进度结果
+     */
+    @Override
+    public DownloadProgress download(DownloadRequest request) {
         long start = System.currentTimeMillis();
 
-        String[] cmdLines = parseCmdLines(cmdOptionVo);
+        CmdOption cmdOption = CmdOption.builder()
+                .url(request.getUrl())
+                .out(request.getOut())
+                .addMediaTag(request.getAddMediaTag())
+                .infoFormat(Format.PLAIN.getCode())
+                .build();
+        String[] cmdLines = parseCmdLines(cmdOption);
         CmdProgress cmdProgress;
         try {
             cmdProgress = doExecAsync(cmdLines);
@@ -124,10 +150,10 @@ public class CmdClient {
     /**
      * 解析转换命令行
      *
-     * @param cmdOptionVo 命令行Vo
+     * @param cmdOption 命令行Vo
      * @return 可执行命令行
      */
-    private String[] parseCmdLines(CmdOptionVo cmdOptionVo) {
+    private String[] parseCmdLines(CmdOption cmdOption) {
         List<String> cmdLines = new ArrayList<>();
 
         if (IS_WIN) {
@@ -143,20 +169,20 @@ public class CmdClient {
         }
 
         String cmd = MEDIA_GET +
-                (StrUtil.isBlank(cmdOptionVo.getUrl()) ? Const.EMPTY : App.URL.append(cmdOptionVo.getUrl())) +
-                (StrUtil.isBlank(cmdOptionVo.getOut()) ? Const.EMPTY : App.OUT.append(cmdOptionVo.getOut())) +
-                (StrUtil.isBlank(cmdOptionVo.getType()) ? Const.EMPTY : App.TYPE.append(cmdOptionVo.getType())) +
-                (cmdOptionVo.getAddMediaTag() != null && cmdOptionVo.getAddMediaTag() ? App.ADD_MEDIA_TAG.getCode() : Const.EMPTY) +
-                (StrUtil.isBlank(cmdOptionVo.getMetaOnly()) ? Const.EMPTY : App.META_ONLY.append(cmdOptionVo.getMetaOnly())) +
-                (StrUtil.isBlank(cmdOptionVo.getLogLevel()) ? Const.EMPTY : App.LOG_LEVEL.append(cmdOptionVo.getLogLevel())) +
-                (StrUtil.isBlank(cmdOptionVo.getKeyword()) ? Const.EMPTY : Search.KEYWORD.appendKeyword(cmdOptionVo.getKeyword())) +
-                (StrUtil.isBlank(cmdOptionVo.getSearchSongName()) ? Const.EMPTY : Search.SEARCH_SONG_NAME.appendKeyword(cmdOptionVo.getSearchSongName())) +
-                (StrUtil.isBlank(cmdOptionVo.getSearchArtist()) ? Const.EMPTY : Search.SEARCH_ARTIST.appendKeyword(cmdOptionVo.getSearchArtist())) +
-                (StrUtil.isBlank(cmdOptionVo.getSearchAlbum()) ? Const.EMPTY : Search.SEARCH_ALBUM.appendKeyword(cmdOptionVo.getSearchAlbum())) +
-                (StrUtil.isBlank(cmdOptionVo.getSearchType()) ? Const.EMPTY : Search.SEARCH_TYPE.append(cmdOptionVo.getSearchType())) +
-                (StrUtil.isBlank(cmdOptionVo.getSources()) ? Const.EMPTY : Search.SOURCES.append(cmdOptionVo.getSources())) +
-                (StrUtil.isBlank(cmdOptionVo.getExcludeSource()) ? Const.EMPTY : Search.EXCLUDE_SOURCE.append(cmdOptionVo.getExcludeSource())) +
-                (StrUtil.isBlank(cmdOptionVo.getInfoFormat()) ? Const.EMPTY : App.INFO_FORMAT.append(cmdOptionVo.getInfoFormat()));
+                (StrUtil.isBlank(cmdOption.getUrl()) ? Const.EMPTY : App.URL.append(cmdOption.getUrl())) +
+                (StrUtil.isBlank(cmdOption.getOut()) ? Const.EMPTY : App.OUT.append(cmdOption.getOut())) +
+                (StrUtil.isBlank(cmdOption.getType()) ? Const.EMPTY : App.TYPE.append(cmdOption.getType())) +
+                (cmdOption.getAddMediaTag() != null && cmdOption.getAddMediaTag() ? App.ADD_MEDIA_TAG.getCode() : Const.EMPTY) +
+                (StrUtil.isBlank(cmdOption.getMetaOnly()) ? Const.EMPTY : App.META_ONLY.append(cmdOption.getMetaOnly())) +
+                (StrUtil.isBlank(cmdOption.getLogLevel()) ? Const.EMPTY : App.LOG_LEVEL.append(cmdOption.getLogLevel())) +
+                (StrUtil.isBlank(cmdOption.getKeyword()) ? Const.EMPTY : Search.KEYWORD.appendKeyword(cmdOption.getKeyword())) +
+                (StrUtil.isBlank(cmdOption.getSearchSongName()) ? Const.EMPTY : Search.SEARCH_SONG_NAME.appendKeyword(cmdOption.getSearchSongName())) +
+                (StrUtil.isBlank(cmdOption.getSearchArtist()) ? Const.EMPTY : Search.SEARCH_ARTIST.appendKeyword(cmdOption.getSearchArtist())) +
+                (StrUtil.isBlank(cmdOption.getSearchAlbum()) ? Const.EMPTY : Search.SEARCH_ALBUM.appendKeyword(cmdOption.getSearchAlbum())) +
+                (StrUtil.isBlank(cmdOption.getSearchType()) ? Const.EMPTY : Search.SEARCH_TYPE.append(cmdOption.getSearchType())) +
+                (StrUtil.isBlank(cmdOption.getSources()) ? Const.EMPTY : Search.SOURCES.append(cmdOption.getSources())) +
+                (StrUtil.isBlank(cmdOption.getExcludeSource()) ? Const.EMPTY : Search.EXCLUDE_SOURCE.append(cmdOption.getExcludeSource())) +
+                (StrUtil.isBlank(cmdOption.getInfoFormat()) ? Const.EMPTY : App.INFO_FORMAT.append(cmdOption.getInfoFormat()));
         cmdLines.add(cmd);
 
         log.info("解析命令行 => {}", cmdLines);
@@ -250,59 +276,6 @@ public class CmdClient {
         });
 
         return cmdProgress;
-    }
-
-    public static void main(String[] args) {
-        ThreadPoolTaskExecutor cmdExecutor = new ThreadPoolTaskExecutor();
-        cmdExecutor.setCorePoolSize(20);
-        cmdExecutor.setMaxPoolSize(20);
-        cmdExecutor.setQueueCapacity(Integer.MAX_VALUE);
-        cmdExecutor.setKeepAliveSeconds(60);
-        cmdExecutor.setThreadNamePrefix("cmd-task-");
-        cmdExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-        cmdExecutor.initialize();
-
-        try {
-            CmdClient cmdClient = new CmdClient(cmdExecutor);
-
-            CmdOptionVo searchVo = CmdOptionVo.builder()
-                    .searchSongName("落日")
-                    .build();
-
-            AtomicInteger i = new AtomicInteger();
-            List<SearchResult> searched = cmdClient.search(searchVo);
-            searched.forEach(s -> log.info(CommonUtil.fillZero(i.getAndIncrement(), 2) + "-" + s.toString()));
-
-            System.out.println();
-            System.out.println("**********************************************************");
-            System.out.println();
-
-            CmdOptionVo downloadVo = CmdOptionVo.builder()
-                    .url(searched.get(0).getUrl())
-                    .out("C:\\Users\\Magese\\Desktop")
-                    .addMediaTag(false)
-                    .infoFormat(Format.PLAIN.getCode())
-                    .build();
-            CmdProgress cmdProgress = cmdClient.downloadAsync(downloadVo);
-
-            while (!cmdProgress.isCompleted()) {
-                log.info(cmdProgress.toString());
-                ThreadUtil.safeSleep(1000);
-            }
-            log.info(cmdProgress.toString());
-            if (cmdProgress.isError()) {
-                String msg = String.format("执行命令行返回结果异常，msg=%s", cmdProgress.getMsg());
-                log.error(msg);
-                throw new ServiceException(msg);
-            }
-        } catch (ServiceException e) {
-            log.warn(e.getMessage());
-        } catch (Exception e) {
-            log.error("未知异常", e);
-        } finally {
-            cmdExecutor.destroy();
-        }
-
     }
 
 }

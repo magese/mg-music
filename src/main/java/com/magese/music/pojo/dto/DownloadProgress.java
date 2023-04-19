@@ -1,31 +1,41 @@
-package com.magese.music.thread;
+package com.magese.music.pojo.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.io.InputStream;
+import lombok.experimental.SuperBuilder;
 
 /**
- * 进度条
+ * 下载进度
  *
  * @author Magese
- * @since 2023/4/18 15:58
+ * @since 2023/4/19 10:26
  */
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CmdProgress {
+public class DownloadProgress implements java.io.Serializable {
 
-    private InputStream inputStream;
-    private InputStream errorStream;
+    /**
+     * 完成百分比
+     */
     @Builder.Default
     private String percent = "0.00%";
+    /**
+     * 返回消息
+     */
     private String msg;
+    /**
+     * 是否已完成
+     */
     @Builder.Default
     private boolean completed = false;
+    /**
+     * 是否错误
+     */
     @Builder.Default
     private boolean error = false;
+
 }

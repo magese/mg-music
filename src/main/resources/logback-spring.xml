@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <contextName>MG-MUSIC</contextName>
+    <property name="LOG_PATH" value="/app/"/>
+    <!-- 读取spring.application.name中的属性来设置系统日志目录 -->
+    <springProperty scope="context" name="APPLICATION_NAME" source="spring.application.name" defaultValue=""/>
+
+    <!-- 彩色日志 -->
+    <!-- 彩色日志依赖的渲染类 -->
+    <conversionRule conversionWord="clr" converterClass="org.springframework.boot.logging.logback.ColorConverter"/>
+    <conversionRule conversionWord="wex" converterClass="org.springframework.boot.logging.logback.WhitespaceThrowableProxyConverter"/>
+    <conversionRule conversionWord="wEx" converterClass="org.springframework.boot.logging.logback.ExtendedWhitespaceThrowableProxyConverter"/>
+    <!-- 彩色日志格式 -->
+    <property name="CONSOLE_LOG_PATTERN" value="${CONSOLE_LOG_PATTERN:-%clr(%date{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${APPLICATION_NAME} %-5level) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%-15.15thread{15}]){faint} %clr(%-45.45logger{40} %-4.5L){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}}"/>
+    <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger Line:%-3L -%msg%n"/>
+    <property name="MAX_FILE_SIZE" value="10MB"/>
+    <property name="FILE_CHARSET" value="UTF-8"/>
+
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+
+    <appender name="FILE_CONSOLE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${APPLICATION_NAME}/logs/console.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${APPLICATION_NAME}/logs/console-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <MaxHistory>10</MaxHistory>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>${MAX_FILE_SIZE}</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <append>true</append>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${FILE_CHARSET}</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>debug</level>
+        </filter>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${FILE_CHARSET}</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>debug</level>
+        </filter>
+    </appender>
+
+    <logger name="com.magese.music" level="${logging.level.root}" additivity="false">
+        <appender-ref ref="FILE_CONSOLE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- 生产环境下，将此级别配置为适合的级别，以免日志文件太多或影响程序性能  FATAL、ERROR、WARN、INFO、DEBUG、TRACE、 ALL。-->
+    <root level="${logging.level.root}">
+        <appender-ref ref="FILE_CONSOLE"/>
+    </root>
+</configuration>

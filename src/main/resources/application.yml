@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: mg-music
+
+server:
+  port: 9024
+
+logging:
+  level:
+    root: info

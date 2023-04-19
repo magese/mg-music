@@ -1,4 +1,4 @@
-package com.magese.music.pojo;
+package com.magese.music.pojo.dto;
 
 import com.magese.music.constants.Cmd;
 import lombok.AllArgsConstructor;
@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CmdOptionVo implements java.io.Serializable {
+public class CmdOption implements java.io.Serializable {
 
     /**
      * 以 http[s]:// 开头的 url
@@ -76,6 +76,6 @@ public class CmdOptionVo implements java.io.Serializable {
      * 排除指定的网站，使用英文逗号隔开
      */
     @Builder.Default
-    private String excludeSource = "youtube";
+    private String excludeSource = Cmd.Source.YOUTUBE.getCode();
 
 }
