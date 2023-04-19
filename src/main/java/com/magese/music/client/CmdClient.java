@@ -25,6 +25,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -254,10 +256,12 @@ public class CmdClient implements MusicClientApi {
                  BufferedReader reader = new BufferedReader(streamReader)) {
                 String line;
                 String prefix = "downloading percent: ";
-                String regex = "\\d+\\.\\d+%";
+                String regex = "\\d+\\.\\d+";
                 while ((line = reader.readLine()) != null) {
                     if (ReUtil.contains(prefix + regex, line)) {
-                        cmdProgress.setPercent(ReUtil.getGroup0(regex, line));
+                        BigDecimal percent = new BigDecimal(ReUtil.getGroup0(regex, line))
+                                .divide(BigDecimal.valueOf(100), 4, RoundingMode.DOWN);
+                        cmdProgress.setPercent(percent);
                     } else {
                         builder.append(line);
                     }

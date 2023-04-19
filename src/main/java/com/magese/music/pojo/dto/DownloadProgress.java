@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
+
 /**
  * 下载进度
  *
@@ -22,7 +24,7 @@ public class DownloadProgress implements java.io.Serializable {
      * 完成百分比
      */
     @Builder.Default
-    private String percent = "0.00%";
+    private BigDecimal percent = BigDecimal.ZERO;
     /**
      * 返回消息
      */
