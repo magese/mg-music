@@ -5,29 +5,37 @@
     <title>SSE TEST</title>
 
     <script type="text/javascript">
+      function getUuid() {
+        return 'xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          let r = (Math.random() * 16) | 0,
+            v = c === 'x' ? r : (r & 0x3) | 0x8
+          return v.toString(16)
+        })
+      }
+
       function download() {
-        const eventSource = new EventSource('http://127.0.0.1:9024/download/?clientId=2323123124&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop')
+        const eventSource = new EventSource(`http://127.0.0.1:9024/download/?clientId=${getUuid()}&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop`)
 
         eventSource.addEventListener('open', (event) => {
-          console.info(event)
+          console.info('与服务器建立连接')
           let $result = document.getElementById('result')
           $result.innerText = '与服务器建立连接'
         })
 
         eventSource.addEventListener('id', (event) => {
-          console.info(event)
+          console.info(event.data)
           let $result = document.getElementById('result')
           $result.innerText = $result.innerText + '\n' + '客户端ID：' + event.data
         })
 
         eventSource.addEventListener('data', (event) => {
-          console.info(event)
+          console.info(event.data)
           let $result = document.getElementById('result')
           $result.innerText = $result.innerText + '\n' + event.data
         })
 
         eventSource.addEventListener('completion', (event) => {
-          console.info(event)
+          console.info(event.data)
           let $result = document.getElementById('result')
           $result.innerText = $result.innerText + '\n' + event.data
 
