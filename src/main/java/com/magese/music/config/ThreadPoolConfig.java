@@ -21,6 +21,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 public class ThreadPoolConfig {
 
     private ThreadPoolTaskExecutor cmdExecutor;
+    private ThreadPoolTaskExecutor sseExecutor;
 
     @Bean(value = "cmdExecutor")
     public ThreadPoolTaskExecutor cmdExecutor() {
@@ -36,8 +37,23 @@ public class ThreadPoolConfig {
         return cmdExecutor;
     }
 
+    @Bean(value = "sseExecutor")
+    public ThreadPoolTaskExecutor sseExecutor() {
+        log.info("【SpringBean注册】 => org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor");
+        this.sseExecutor = new ThreadPoolTaskExecutor();
+        sseExecutor.setCorePoolSize(20);
+        sseExecutor.setMaxPoolSize(20);
+        sseExecutor.setQueueCapacity(Integer.MAX_VALUE);
+        sseExecutor.setKeepAliveSeconds(60);
+        sseExecutor.setThreadNamePrefix("sse-task-");
+        sseExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        sseExecutor.initialize();
+        return sseExecutor;
+    }
+
     @PreDestroy
     public void destroy() {
         cmdExecutor.shutdown();
+        sseExecutor.shutdown();
     }
 }
