@@ -4,18 +4,47 @@
     <meta charset="UTF-8">
     <title>SSE TEST</title>
 
-
     <script type="text/javascript">
-      const source = new EventSource('http://127.0.0.1:9024/download/?clientId=123&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop');
-      source.onmessage = function(event) {
-        console.info(event.data);
-        let $result = document.getElementById('result');
-        $result.innerText = $result.innerText + '\n' + event.data
-      };
+      function download() {
+        const eventSource = new EventSource('http://127.0.0.1:9024/download/sse?clientId=2323123124&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop')
+
+        eventSource.addEventListener('open', (event) => {
+          console.info(event)
+          let $result = document.getElementById('result')
+          $result.innerText = '与服务器建立连接'
+        })
+
+        eventSource.addEventListener('id', (event) => {
+          console.info(event)
+          let $result = document.getElementById('result')
+          $result.innerText = $result.innerText + '\n' + '客户端ID：' + event.data
+        })
+
+        eventSource.addEventListener('data', (event) => {
+          console.info(event)
+          let $result = document.getElementById('result')
+          $result.innerText = $result.innerText + '\n' + event.data
+        })
+
+        eventSource.addEventListener('completion', (event) => {
+          console.info(event)
+          let $result = document.getElementById('result')
+          $result.innerText = $result.innerText + '\n' + event.data
+
+          eventSource.close()
+          console.info('关闭sse连接')
+          $result.innerText = $result.innerText + '\n' + '关闭sse连接'
+        })
+
+        eventSource.onerror = (error) => {
+          console.error('错误信息：', error)
+        }
+      }
     </script>
 </head>
 
 <body>
-<div id="result">init</div>
+<button onclick="download()">开始下载</button>
+<div id="result"></div>
 </body>
 </html>

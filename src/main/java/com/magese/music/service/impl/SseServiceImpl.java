@@ -1,18 +1,22 @@
 package com.magese.music.service.impl;
 
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONConfig;
+import cn.hutool.json.JSONUtil;
+import com.magese.music.constants.SseEventType;
 import com.magese.music.exception.ServiceException;
+import com.magese.music.pojo.R;
 import com.magese.music.service.SseService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -26,7 +30,7 @@ import java.util.function.Consumer;
 public class SseServiceImpl implements SseService {
 
     private static final Map<String, SseEmitter> SSE_CACHE = new ConcurrentHashMap<>();
-    private static final String SSE_CLIENT_ID = "ClientId";
+    private static final Map<String, AtomicInteger> ID_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 开启链接
@@ -35,30 +39,25 @@ public class SseServiceImpl implements SseService {
      * @return 不存在时创建新客户端ID
      */
     @Override
-    public String start(String clientId) {
+    public SseEmitter start(String clientId) {
         if (StrUtil.isBlank(clientId)) {
             clientId = IdUtil.fastSimpleUUID();
         }
 
-        SseEmitter sseEmitter = Optional.ofNullable(SSE_CACHE.get(clientId)).orElse(new SseEmitter(0L));
-        sseEmitter.onCompletion(onCompletion(clientId));
-        sseEmitter.onError(onError(clientId));
-        sseEmitter.onTimeout(onTimeout(clientId));
-        SSE_CACHE.put(clientId, sseEmitter);
-
-        try {
-            SseEmitter.SseEventBuilder eventBuilder = SseEmitter.event()
-                    .id(SSE_CLIENT_ID)
-                    .data(clientId);
-            sseEmitter.send(eventBuilder);
-            log.info("创建SSE客户端连接 => 客户端ID：{}", clientId);
-        } catch (IOException e) {
-            String msg = String.format("创建SSE长链接异常，异常信息：%s", e.getMessage());
-            log.error(msg, e);
-            throw new ServiceException(msg);
+        SseEmitter sseEmitter;
+        if ((sseEmitter = SSE_CACHE.get(clientId)) != null) {
+            log.info("SSE服务 => 获取连接，客户端ID：{}，客户端数量：{}", clientId, SSE_CACHE.size());
+        } else {
+            sseEmitter = new SseEmitter(0L);
+            sseEmitter.onCompletion(onCompletion(clientId));
+            sseEmitter.onError(onError(clientId));
+            sseEmitter.onTimeout(onTimeout(clientId));
+            SSE_CACHE.put(clientId, sseEmitter);
+            log.info("SSE服务 => 创建连接，客户端ID：{}，客户端数量：{}", clientId, SSE_CACHE.size());
         }
 
-        return clientId;
+        send(clientId, SseEventType.ID, clientId);
+        return sseEmitter;
     }
 
     /**
@@ -68,40 +67,53 @@ public class SseServiceImpl implements SseService {
      */
     @Override
     public void close(String clientId) {
-        try {
-            SseEmitter sseEmitter = SSE_CACHE.get(clientId);
-            if (sseEmitter != null) {
-                sseEmitter.complete();
-                removeFromCache(clientId);
-            }
-        } catch (Exception e) {
-            String msg = String.format("关闭SSE连接异常，客户端ID：%s", clientId);
-            log.error(msg, e);
-            throw new ServiceException(msg);
+        SseEmitter sseEmitter = SSE_CACHE.get(clientId);
+        if (sseEmitter != null) {
+            send(clientId, SseEventType.COMPLETION, R.ok());
+            sseEmitter.complete();
         }
     }
 
     /**
-     * 发送数据
+     * 发送data数据
      *
      * @param clientId 客户端ID
      * @param data     数据内容
      */
     @Override
-    public void send(String clientId, Object data) {
+    public void sendData(String clientId, Object data) {
+        send(clientId, SseEventType.DATA, data);
+    }
+
+    /**
+     * 发送数据
+     *
+     * @param clientId  客户端ID
+     * @param eventType 事件类型
+     * @param data      数据内容
+     */
+    @Override
+    public void send(String clientId, SseEventType eventType, Object data) {
         SseEmitter sseEmitter = SSE_CACHE.get(clientId);
         if (sseEmitter == null) {
-            String msg = String.format("SSE长链接发送数据失败，客户端不存在，客户端ID：%s", clientId);
+            String msg = String.format("SSE服务发送数据失败，客户端不存在，客户端ID：%s", clientId);
             log.warn(msg);
             throw new ServiceException(msg);
         }
 
         try {
-            sseEmitter.send(data);
+            JSONConfig config = JSONConfig.create()
+                    .setIgnoreError(true)
+                    .setIgnoreNullValue(false)
+                    .setCheckDuplicate(false);
+            String dataJson = JSONUtil.toJsonStr(data, config);
+            SseEmitter.SseEventBuilder event = SseEmitter.event()
+                    .id(getIdAndIncrement(clientId))
+                    .name(eventType.getCode())
+                    .data(dataJson, MediaType.APPLICATION_JSON);
+            sseEmitter.send(event);
         } catch (IOException e) {
-            String msg = String.format("SSE长链接发送数据异常，异常信息：%s", e.getMessage());
-            log.error(msg, e);
-            throw new ServiceException(msg);
+            log.warn("SSE服务发送数据异常，异常信息：{}", e.getMessage());
         }
     }
 
@@ -113,7 +125,7 @@ public class SseServiceImpl implements SseService {
      */
     private Runnable onCompletion(String clientId) {
         return () -> {
-            log.info("SSE长链接 => 处理完成，客户端ID：{}", clientId);
+            log.info("SSE服务 => 处理完成回调，客户端ID：{}", clientId);
             removeFromCache(clientId);
         };
     }
@@ -125,25 +137,7 @@ public class SseServiceImpl implements SseService {
      * @return 回调任务
      */
     private Consumer<Throwable> onError(String clientId) {
-        return e -> {
-            log.error("SSE长链接处理异常，客户端ID：{}", clientId, e);
-
-            // retry
-            for (int i = 0; i < 3; i++) {
-                int retryNum = i + 1;
-                try {
-                    ThreadUtil.safeSleep(1000);
-                    SseEmitter sseEmitter = SSE_CACHE.get(clientId);
-                    if (sseEmitter == null) {
-                        log.warn("SSE第{}次重推消息失败，未找到客户端，客户端ID：{}", retryNum, clientId);
-                        continue;
-                    }
-                    sseEmitter.send(String.format("失败后第%s次重推", retryNum));
-                } catch (Exception ex) {
-                    log.error("SSE第{}次重推消息失败", retryNum, e);
-                }
-            }
-        };
+        return e -> log.error("SSE服务处理异常回调，客户端ID：{}", clientId, e);
     }
 
     /**
@@ -154,7 +148,7 @@ public class SseServiceImpl implements SseService {
      */
     private Runnable onTimeout(String clientId) {
         return () -> {
-            log.warn("SSE长链接 => 处理超时，客户端ID：{}", clientId);
+            log.warn("SSE服务 => 处理超时回调，客户端ID：{}", clientId);
             removeFromCache(clientId);
         };
     }
@@ -166,6 +160,22 @@ public class SseServiceImpl implements SseService {
      */
     private void removeFromCache(String clientId) {
         SSE_CACHE.remove(clientId);
-        log.info("移除SSE客户端连接 => 客户端ID：{}", clientId);
+        ID_CACHE.remove(clientId);
+        log.info("SSE服务 => 移除客户端连接，客户端ID：{}，客户端数量：{}", clientId, SSE_CACHE.size());
+    }
+
+    /**
+     * 获取ID并自增
+     *
+     * @param clientId 客户端ID
+     * @return ID值
+     */
+    private String getIdAndIncrement(String clientId) {
+        AtomicInteger atomicInteger = ID_CACHE.get(clientId);
+        if (atomicInteger == null) {
+            atomicInteger = new AtomicInteger();
+            ID_CACHE.put(clientId, atomicInteger);
+        }
+        return String.valueOf(atomicInteger.getAndIncrement());
     }
 }
