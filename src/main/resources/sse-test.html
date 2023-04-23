@@ -14,7 +14,7 @@
       }
 
       function download() {
-        const eventSource = new EventSource(`http://127.0.0.1:9024/download/?clientId=${getUuid()}&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop`)
+        const eventSource = new EventSource(`http://127.0.0.1:9024/api/download/?clientId=${getUuid()}&url=https%3A%2F%2Fmusic.migu.cn%2Fv3%2Fmusic%2Fsong%2F6005662HS7X&out=C%3A%5CUsers%5CMagese%5CDesktop`)
 
         eventSource.addEventListener('open', () => {
           console.info('与服务器建立连接')
