@@ -1,6 +1,5 @@
 package com.magese.music.constants;
 
-import com.magese.music.exception.ServiceException;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
