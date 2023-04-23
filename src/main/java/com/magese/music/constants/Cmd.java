@@ -1,7 +1,10 @@
 package com.magese.music.constants;
 
+import com.magese.music.exception.ServiceException;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
+import java.util.Arrays;
 
 /**
  * media-get 命令行枚举
@@ -85,17 +88,26 @@ public class Cmd {
     public enum Source {
         BILIBILI("bilibili", "哔哩哔哩"),
         DOUYIN("douyin", "抖音"),
-        KUGOU("kugou", "酷狗"),
-        KUWO("kuwo", "酷我"),
+        KUGOU("kugou", "酷狗音乐"),
+        KUWO("kuwo", "酷我音乐"),
         MIGU("migu", "咪咕音乐"),
         NETEASE("netease", "网易云音乐"),
         QQ("qq", "QQ音乐"),
         YOUTUBE("youtube", "YouTube"),
         QMKG("qmkg", "全民K歌"),
+        UNKNOWN("unknown", "未知"),
         ;
 
         private final String code;
         private final String msg;
+
+        public static String getMsgByCode(String code) {
+            return Arrays.stream(Source.values())
+                    .filter(e -> e.code.equals(code))
+                    .findFirst()
+                    .orElse(UNKNOWN)
+                    .getMsg();
+        }
     }
 
     /**

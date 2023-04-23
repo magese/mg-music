@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 搜索结果
  *
@@ -62,6 +64,6 @@ public class SearchResult implements java.io.Serializable {
      * 评分
      */
     @JsonAlias("Score")
-    private String score;
+    private BigDecimal score;
 
 }

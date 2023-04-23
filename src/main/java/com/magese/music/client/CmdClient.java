@@ -115,7 +115,12 @@ public class CmdClient implements MusicClientApi {
                 .setIgnoreError(true);
         JSONArray array = JSONUtil.parseArray(msg, jsonConfig);
         log.info("搜索结果数量 => {}", array.size());
-        return array.toList(SearchResult.class);
+        List<SearchResult> results = array.toList(SearchResult.class);
+        results.forEach(r -> {
+            r.setSource(Source.getMsgByCode(r.getSource()));
+            r.setScore(r.getScore().setScale(2, RoundingMode.DOWN));
+        });
+        return results;
     }
 
     /**
