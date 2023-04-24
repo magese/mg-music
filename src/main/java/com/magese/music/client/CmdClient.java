@@ -1,6 +1,8 @@
 package com.magese.music.client;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
@@ -101,26 +103,9 @@ public class CmdClient implements MusicClientApi {
             throw new ServiceException(msg);
         }
 
-        String msg = result.getSuccessMsg();
-
-        String regex = "\\[\\s*\\{\\s*\"Name\"";
-        MatchResult matchResult = ReUtil.indexOf(regex, msg);
-        if (matchResult == null) {
-            return Collections.emptyList();
-        }
-        msg = msg.substring(matchResult.start(0));
-
-        JSONConfig jsonConfig = JSONConfig.create()
-                .setIgnoreCase(true)
-                .setIgnoreError(true);
-        JSONArray array = JSONUtil.parseArray(msg, jsonConfig);
-        log.info("搜索结果数量 => {}", array.size());
-        List<SearchResult> results = array.toList(SearchResult.class);
-        results.forEach(r -> {
-            r.setSource(Source.getMsgByCode(r.getSource()));
-            r.setScore(r.getScore().setScale(2, RoundingMode.DOWN));
-        });
-        return results;
+        List<SearchResult> searchResults = parseSearchResult(result.getSuccessMsg());
+        log.info("搜索结果数量 => {}", searchResults.size());
+        return searchResults;
     }
 
     /**
@@ -151,6 +136,44 @@ public class CmdClient implements MusicClientApi {
         }
 
         return progress;
+    }
+
+    /**
+     * 转换为搜索结果
+     *
+     * @param cmdResult 命令行结果
+     * @return 搜索结果列表
+     */
+    private List<SearchResult> parseSearchResult(String cmdResult) {
+        // 正则提取json数组
+        String regex = "\\[\\s*\\{\\s*\"Name\"";
+        MatchResult matchResult = ReUtil.indexOf(regex, cmdResult);
+        if (matchResult == null) {
+            return Collections.emptyList();
+        }
+        cmdResult = cmdResult.substring(matchResult.start(0));
+
+        // 转换为对象
+        JSONConfig jsonConfig = JSONConfig.create()
+                .setIgnoreCase(true)
+                .setIgnoreError(true);
+        JSONArray array = JSONUtil.parseArray(cmdResult, jsonConfig);
+        if (CollUtil.isEmpty(array)) {
+            return Collections.emptyList();
+        }
+
+        // 设置字段
+        List<SearchResult> results = array.toList(SearchResult.class);
+        BigDecimal factors = results.get(0).getScore().divide(BigDecimal.valueOf(5), 2, RoundingMode.DOWN);
+        results.forEach(r -> {
+            r.setSource(Source.getMsgByCode(r.getSource()));
+            if (NumberUtil.isLess(BigDecimal.ZERO, r.getScore())) {
+                r.setScore(r.getScore().divide(factors, 2, RoundingMode.DOWN));
+            } else {
+                r.setScore(BigDecimal.ZERO);
+            }
+        });
+        return results;
     }
 
     /**
